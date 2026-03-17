@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SolNow Prospector</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background: #0f172a; }
+    @keyframes slide-in {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .row-enter { animation: slide-in 0.3s ease-out; }
+    .pulse-dot {
+      width: 8px; height: 8px; border-radius: 50%; background: #10b981;
+      animation: pulse-anim 1.2s ease-in-out infinite;
+    }
+    @keyframes pulse-anim {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(1.4); }
+    }
+    .chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 4px 12px; border-radius: 9999px;
+      background: #1e293b; border: 1px solid #334155;
+      color: #e2e8f0; font-size: 14px;
+    }
+    .chip button {
+      color: #64748b; cursor: pointer; margin-left: 2px;
+      background: none; border: none; font-size: 16px; line-height: 1;
+    }
+    .chip button:hover { color: #f87171; }
+    input::placeholder { color: #475569; }
+    textarea::placeholder { color: #475569; }
+    .section-toggle { cursor: pointer; user-select: none; }
+    .section-toggle:hover .toggle-icon { color: #10b981; }
+    .query-tag {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 12px; border-radius: 8px;
+      background: #1e293b; border: 1px solid #334155;
+      color: #cbd5e1; font-size: 13px; line-height: 1.4;
+    }
+    .query-tag button {
+      color: #64748b; cursor: pointer;
+      background: none; border: none; font-size: 15px; line-height: 1;
+      flex-shrink: 0;
+    }
+    .query-tag button:hover { color: #f87171; }
+  </style>
+</head>
+<body class="min-h-screen text-slate-200">
+  <div class="max-w-6xl mx-auto px-4 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-white tracking-tight">SolNow <span class="text-emerald-400">Prospector</span></h1>
+      <p class="text-slate-400 mt-1 text-sm">Encuentra empresas en tiempo real con Google Places</p>
+    </div>
+
+    <!-- API Key -->
+    <div class="bg-slate-800/60 border border-slate-700 rounded-xl p-5 mb-4">
+      <div class="flex items-center gap-3 mb-3">
+        <svg class="w-4 h-4 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+        <label class="text-sm font-medium text-slate-300">Google Places API Key</label>
+        <span class="text-xs text-slate-500">(se envía directo a Google, no se guarda en el servidor)</span>
+      </div>
+      <div class="relative">
+        <input id="apiKeyInput" type="password" placeholder="AIza..."
+               class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30 transition pr-10">
+        <button onclick="toggleKeyVisibility()" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition" title="Mostrar/Ocultar">
+          <svg id="eyeIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Zones -->
+    <div class="bg-slate-800/60 border border-slate-700 rounded-xl p-5 mb-4">
+      <label class="text-sm font-medium text-slate-300 mb-3 block">Zonas de búsqueda</label>
+      <div class="flex flex-wrap items-center gap-2 mb-3" id="chips"></div>
+      <input id="zoneInput" type="text" placeholder="Escribe una zona y pulsa Enter..."
+             class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 transition">
+    </div>
+
+    <!-- Queries -->
+    <div class="bg-slate-800/60 border border-slate-700 rounded-xl p-5 mb-4">
+      <div class="section-toggle flex items-center justify-between mb-3" onclick="toggleQueries()">
+        <div class="flex items-center gap-2">
+          <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <label class="text-sm font-medium text-slate-300 cursor-pointer">Palabras clave de búsqueda</label>
+          <span id="queryCount" class="text-xs text-slate-500 tabular-nums"></span>
+        </div>
+        <svg id="queryChevron" class="w-4 h-4 text-slate-500 toggle-icon transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </div>
+
+      <div id="queriesPanel">
+        <p class="text-xs text-slate-500 mb-3">Usa <code class="bg-slate-700 px-1 rounded">{zona}</code> como placeholder para la zona. Si no lo incluyes, la zona se añade al final.</p>
+        <div class="flex flex-wrap gap-2 mb-3" id="queryTags"></div>
+        <div class="flex gap-2">
+          <input id="queryInput" type="text" placeholder='Ej: alquiler kayak {zona}'
+                 class="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 transition">
+          <button onclick="addQuery()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-2.5 rounded-lg text-sm transition">
+            + Añadir
+          </button>
+        </div>
+        <div class="flex gap-2 mt-3">
+          <button onclick="resetQueries()" class="text-xs text-slate-500 hover:text-slate-300 transition underline underline-offset-2">
+            Restaurar por defecto
+          </button>
+          <button onclick="clearAllQueries()" class="text-xs text-red-400/60 hover:text-red-400 transition underline underline-offset-2">
+            Borrar todas
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Search button -->
+    <div class="mb-6">
+      <button id="searchBtn" onclick="startSearch()"
+              class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-6 py-3 rounded-xl text-sm transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        Buscar
+      </button>
+    </div>
+
+    <!-- Status bar -->
+    <div id="statusBar" class="hidden bg-slate-800/60 border border-slate-700 rounded-xl p-4 mb-6">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="pulse-dot" id="statusDot"></div>
+          <span id="statusText" class="text-sm text-slate-300">Buscando...</span>
+        </div>
+        <span id="counter" class="text-2xl font-bold text-emerald-400 tabular-nums">0</span>
+      </div>
+      <div class="mt-3 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+        <div id="progressBar" class="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500" style="width: 0%"></div>
+      </div>
+    </div>
+
+    <!-- Results table -->
+    <div id="tableWrap" class="hidden bg-slate-800/60 border border-slate-700 rounded-xl overflow-hidden mb-6">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-slate-700 text-left text-xs uppercase tracking-wider text-slate-400">
+              <th class="px-4 py-3">Nombre</th>
+              <th class="px-4 py-3">Zona</th>
+              <th class="px-4 py-3">Teléfono</th>
+              <th class="px-4 py-3">Web</th>
+              <th class="px-4 py-3 text-center">Rating</th>
+            </tr>
+          </thead>
+          <tbody id="results"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Download -->
+    <div id="downloadWrap" class="hidden">
+      <button id="downloadBtn" onclick="downloadExcel()"
+              class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-3 rounded-xl text-sm transition flex items-center justify-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        Descargar Excel
+      </button>
+    </div>
+
+    <!-- Error -->
+    <div id="errorWrap" class="hidden bg-red-900/30 border border-red-800 rounded-xl p-4 mb-6">
+      <p id="errorText" class="text-red-300 text-sm"></p>
+    </div>
+  </div>
+
+  <script>
+    // ── Default data ──
+    const DEFAULT_ZONES = ["Ibiza", "Mallorca", "Alicante", "Valencia"];
+    const DEFAULT_QUERIES = [
+      "alquiler motos de agua {zona}",
+      "alquiler moto de agua {zona}",
+      "alquiler jet ski {zona}",
+      "jet ski rental {zona}",
+      "motos de agua {zona}",
+      "moto acuática {zona}",
+      "alquiler moto acuática {zona}",
+      "excursiones moto de agua {zona}",
+      "rutas en moto de agua {zona}",
+      "safari motos de agua {zona}",
+      "jet ski tour {zona}",
+      "jet ski hire {zona}",
+      "rent jet ski {zona}",
+      "personal watercraft rental {zona}",
+      "actividades acuáticas {zona}",
+      "deportes acuáticos {zona}",
+    ];
+
+    // ── State (hydrate from localStorage) ──
+    let zones = JSON.parse(localStorage.getItem("sol_zones")) || [...DEFAULT_ZONES];
+    let queries = JSON.parse(localStorage.getItem("sol_queries")) || [...DEFAULT_QUERIES];
+    let jobId = null;
+    let count = 0;
+    let evtSource = null;
+    let queriesPanelOpen = true;
+
+    // Hydrate API key
+    const savedKey = localStorage.getItem("sol_api_key") || "";
+
+    // ── Persist helpers ──
+    function saveState() {
+      localStorage.setItem("sol_zones", JSON.stringify(zones));
+      localStorage.setItem("sol_queries", JSON.stringify(queries));
+    }
+
+    // ── Zones ──
+    function renderChips() {
+      const container = document.getElementById("chips");
+      container.innerHTML = zones.map((z, i) =>
+        `<span class="chip">${escHtml(z)}<button onclick="removeZone(${i})">&times;</button></span>`
+      ).join("");
+    }
+
+    function removeZone(i) {
+      zones.splice(i, 1);
+      renderChips();
+      saveState();
+    }
+
+    document.getElementById("zoneInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        const val = e.target.value.trim();
+        if (val && !zones.includes(val)) {
+          zones.push(val);
+          renderChips();
+          saveState();
+        }
+        e.target.value = "";
+      }
+    });
+
+    // ── Queries ──
+    function renderQueryTags() {
+      const container = document.getElementById("queryTags");
+      container.innerHTML = queries.map((q, i) =>
+        `<span class="query-tag">${escHtml(q)}<button onclick="removeQuery(${i})">&times;</button></span>`
+      ).join("");
+      document.getElementById("queryCount").textContent = `(${queries.length})`;
+    }
+
+    function removeQuery(i) {
+      queries.splice(i, 1);
+      renderQueryTags();
+      saveState();
+    }
+
+    function addQuery() {
+      const input = document.getElementById("queryInput");
+      const val = input.value.trim();
+      if (val && !queries.includes(val)) {
+        queries.push(val);
+        renderQueryTags();
+        saveState();
+      }
+      input.value = "";
+      input.focus();
+    }
+
+    document.getElementById("queryInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        addQuery();
+      }
+    });
+
+    function resetQueries() {
+      queries = [...DEFAULT_QUERIES];
+      renderQueryTags();
+      saveState();
+    }
+
+    function clearAllQueries() {
+      queries = [];
+      renderQueryTags();
+      saveState();
+    }
+
+    function toggleQueries() {
+      queriesPanelOpen = !queriesPanelOpen;
+      document.getElementById("queriesPanel").style.display = queriesPanelOpen ? "block" : "none";
+      document.getElementById("queryChevron").style.transform = queriesPanelOpen ? "rotate(0deg)" : "rotate(-90deg)";
+    }
+
+    // ── API Key visibility ──
+    function toggleKeyVisibility() {
+      const input = document.getElementById("apiKeyInput");
+      input.type = input.type === "password" ? "text" : "password";
+    }
+
+    // ── Search ──
+    async function startSearch() {
+      if (!zones.length) return;
+      if (!queries.length) {
+        showError("Añade al menos una palabra clave de búsqueda.");
+        return;
+      }
+
+      const apiKey = document.getElementById("apiKeyInput").value.trim();
+
+      // Reset UI
+      const btn = document.getElementById("searchBtn");
+      btn.disabled = true;
+      count = 0;
+      document.getElementById("counter").textContent = "0";
+      document.getElementById("results").innerHTML = "";
+      document.getElementById("statusBar").classList.remove("hidden");
+      document.getElementById("tableWrap").classList.remove("hidden");
+      document.getElementById("downloadWrap").classList.add("hidden");
+      document.getElementById("errorWrap").classList.add("hidden");
+      document.getElementById("statusText").textContent = "Buscando en " + zones.join(", ") + "...";
+      document.getElementById("statusDot").style.background = "#10b981";
+      document.getElementById("statusDot").style.animation = "";
+      document.getElementById("progressBar").style.width = "15%";
+
+      // Save API key to localStorage
+      if (apiKey) localStorage.setItem("sol_api_key", apiKey);
+
+      try {
+        const resp = await fetch("/api/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ zones, queries, api_key: apiKey }),
+        });
+        const data = await resp.json();
+        if (data.error) throw new Error(data.error);
+        jobId = data.job_id;
+        listenSSE(jobId);
+      } catch (err) {
+        showError(err.message);
+        btn.disabled = false;
+      }
+    }
+
+    function listenSSE(id) {
+      evtSource = new EventSource(`/api/stream/${id}`);
+
+      evtSource.addEventListener("place", (e) => {
+        const p = JSON.parse(e.data);
+        count++;
+        document.getElementById("counter").textContent = count;
+
+        const pct = Math.min(15 + count * 1.5, 90);
+        document.getElementById("progressBar").style.width = pct + "%";
+
+        const row = document.createElement("tr");
+        row.className = "row-enter border-b border-slate-700/50 hover:bg-slate-700/30 transition";
+
+        const website = p.website
+          ? `<a href="${escHtml(p.website)}" target="_blank" rel="noopener" class="text-emerald-400 hover:underline truncate block max-w-[200px]">${trimUrl(p.website)}</a>`
+          : '<span class="text-slate-500">—</span>';
+
+        const rating = p.rating
+          ? `<span class="text-amber-400">&#9733;</span> ${p.rating}`
+          : '<span class="text-slate-500">—</span>';
+
+        row.innerHTML = `
+          <td class="px-4 py-2.5 font-medium text-white">${escHtml(p.name)}</td>
+          <td class="px-4 py-2.5 text-slate-400">${escHtml(p.zona)}</td>
+          <td class="px-4 py-2.5 text-slate-300">${escHtml(p.phone) || '<span class="text-slate-500">—</span>'}</td>
+          <td class="px-4 py-2.5">${website}</td>
+          <td class="px-4 py-2.5 text-center">${rating}</td>
+        `;
+
+        const tbody = document.getElementById("results");
+        tbody.insertBefore(row, tbody.firstChild);
+      });
+
+      evtSource.addEventListener("done", (e) => {
+        evtSource.close();
+        const d = JSON.parse(e.data);
+        document.getElementById("progressBar").style.width = "100%";
+        document.getElementById("statusDot").style.background = "#3b82f6";
+        document.getElementById("statusDot").style.animation = "none";
+        document.getElementById("statusText").textContent = `Completado — ${d.total} empresas encontradas`;
+        document.getElementById("downloadWrap").classList.remove("hidden");
+        document.getElementById("searchBtn").disabled = false;
+      });
+
+      evtSource.addEventListener("error", (e) => {
+        evtSource.close();
+        let msg = "Error during search";
+        try { msg = JSON.parse(e.data).message; } catch {}
+        showError(msg);
+        document.getElementById("searchBtn").disabled = false;
+      });
+
+      evtSource.onerror = () => {
+        evtSource.close();
+      };
+    }
+
+    function downloadExcel() {
+      if (jobId) window.location.href = `/api/download/${jobId}`;
+    }
+
+    function showError(msg) {
+      document.getElementById("errorWrap").classList.remove("hidden");
+      document.getElementById("errorText").textContent = msg;
+      document.getElementById("statusDot").style.background = "#ef4444";
+      document.getElementById("statusDot").style.animation = "none";
+    }
+
+    function escHtml(s) {
+      if (!s) return "";
+      const d = document.createElement("div");
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    function trimUrl(url) {
+      try { return new URL(url).hostname.replace("www.", ""); } catch { return url; }
+    }
+
+    // ── Init ──
+    document.getElementById("apiKeyInput").value = savedKey;
+    renderChips();
+    renderQueryTags();
+  </script>
+</body>
+</html>
