@@ -6,6 +6,10 @@ Estimates annual GMV (Gross Merchandise Value) for water sports operators
 and calculates an ICP (Ideal Customer Profile) score for SDR prioritization.
 """
 
+import logging
+
+log = logging.getLogger(__name__)
+
 # ── Category defaults ────────────────────────────────────────────────────────
 
 CATEGORIA_CONFIG = {
@@ -113,6 +117,35 @@ _ZONA_MAP = {
 }
 
 
+# ── GMV caps per category (prevent absurd estimates) ─────────────────────────
+
+GMV_CAP_POR_CATEGORIA = {
+    "jet_ski": 2_000_000,
+    "kayak": 800_000,
+    "paddle_surf": 500_000,
+    "charter_privado": 3_000_000,
+    "excursion_barco": 5_000_000,
+    "buceo": 1_000_000,
+    "mixto": 3_000_000,
+    "otro": 2_000_000,
+}
+
+# ── Marketplace / intermediary detection ─────────────────────────────────────
+
+MARKETPLACE_KEYWORDS = [
+    "boatjump", "getmyboat", "samboat", "nautal", "click&boat",
+    "clickandboat", "viator", "getyourguide", "civitatis", "airbnb",
+    "marketplace", "plataforma", "broker", "intermediario",
+    "comparador", "buscador",
+]
+
+
+def es_marketplace(nombre: str, web: str) -> bool:
+    """Detect if an operator is actually a marketplace/intermediary."""
+    text = (nombre + " " + web).lower()
+    return any(kw in text for kw in MARKETPLACE_KEYWORDS)
+
+
 def clasificar_zona_costera(direccion: str, zona_busqueda: str) -> str:
     """Map a search zone or address to a coastal zone key for DIAS_TEMPORADA."""
     # Try the search zone first (most reliable)
@@ -181,6 +214,12 @@ def calcular_gmv(operador: dict) -> dict:
     # Floor: at least €0
     gmv_final = max(gmv_final, 0)
 
+    # Apply GMV cap per category to prevent absurd estimates
+    cap = GMV_CAP_POR_CATEGORIA.get(cat_key, GMV_CAP_POR_CATEGORIA.get("otro", 3_000_000))
+    if gmv_final > cap:
+        log.debug("GMV capped for %s: €%d → €%d", operador.get("nombre", "?"), gmv_final, cap)
+        gmv_final = cap
+
     return {
         "gmv_estimado_anual": round(gmv_final),
         "comision_solnow_anual": round(gmv_final * 0.015),
@@ -189,7 +228,11 @@ def calcular_gmv(operador: dict) -> dict:
 
 
 def calcular_score_icp(operador: dict) -> int:
-    """Calculate ICP score (0-100) for SDR prioritization."""
+    """Calculate ICP score (0-100) for SDR prioritization.
+
+    When data is missing (None), applies benefit-of-the-doubt scoring
+    to avoid penalizing operators that simply lack enrichment data.
+    """
     score = 0
 
     # Reviews per year — proxy for operational volume (40 points)
@@ -204,7 +247,8 @@ def calcular_score_icp(operador: dict) -> int:
         score += 10
 
     # Category — high volume by nature (25 points)
-    cat = operador.get("categoria_principal", "")
+    # If null → 15 pts (benefit of the doubt)
+    cat = operador.get("categoria_principal")
     if cat in ("jet_ski", "kayak", "paddle_surf"):
         score += 25
     elif cat == "excursion_barco":
@@ -213,19 +257,27 @@ def calcular_score_icp(operador: dict) -> int:
         score += 15
     elif cat == "charter_privado":
         score += 5
+    elif cat is None:
+        score += 15  # benefit of the doubt
 
     # Price type (20 points)
-    tipo = operador.get("tipo_precio", "")
+    # If null → 10 pts (benefit of the doubt)
+    tipo = operador.get("tipo_precio")
     if tipo == "por_persona":
         score += 20
     elif tipo == "por_hora":
         score += 15
     elif tipo == "por_grupo":
         score += 5
+    elif tipo is None:
+        score += 10  # benefit of the doubt
 
     # Low digitalization signals = more pain (15 points)
-    if not operador.get("tiene_reserva_online"):
+    reserva = operador.get("tiene_reserva_online")
+    if reserva is False:
         score += 15
+    elif reserva is None:
+        score += 7  # unknown → partial credit
     elif operador.get("menciona_contrato") is False:
         score += 10
 
@@ -237,6 +289,12 @@ def score_and_estimate(operador: dict) -> dict:
 
     Mutates and returns the operador dict with added fields.
     """
+    # Marketplace detection
+    operador["es_marketplace"] = es_marketplace(
+        operador.get("nombre", ""),
+        operador.get("web", ""),
+    )
+
     # Zone classification
     zona_costera = clasificar_zona_costera(
         operador.get("direccion", ""),
@@ -245,12 +303,21 @@ def score_and_estimate(operador: dict) -> dict:
     operador["zona_costera"] = zona_costera
     operador["dias_temporada"] = DIAS_TEMPORADA.get(zona_costera, DIAS_TEMPORADA["default"])
 
-    # GMV
-    gmv = calcular_gmv(operador)
-    operador.update(gmv)
+    # GMV (skip for marketplaces — their reviews ≠ their own operations)
+    if operador["es_marketplace"]:
+        operador["gmv_estimado_anual"] = 0
+        operador["comision_solnow_anual"] = 0
+        operador["comision_solnow_mensual"] = 0
+    else:
+        gmv = calcular_gmv(operador)
+        operador.update(gmv)
 
-    # ICP score
-    operador["score_icp"] = calcular_score_icp(operador)
+    # ICP score (marketplaces get 0 — they're not our customers)
+    if operador["es_marketplace"]:
+        operador["score_icp"] = 0
+    else:
+        operador["score_icp"] = calcular_score_icp(operador)
+
     operador["es_icp"] = operador["score_icp"] > 60
 
     return operador
