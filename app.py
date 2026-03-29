@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
 SolNow Prospector — Web interface with real-time SSE streaming.
+Supports optional AI enrichment via Anthropic API for GMV estimation and ICP scoring.
 Run: python app.py
 """
 
+import asyncio
 import json
 import os
 import queue
@@ -13,6 +15,7 @@ from datetime import datetime
 
 from flask import Flask, Response, jsonify, render_template, request, send_file
 
+from pipeline import export_enriched, run_pipeline
 from prospect import export_excel, run_search
 
 app = Flask(__name__)
@@ -33,6 +36,8 @@ def start_search():
     if not api_key:
         return jsonify({"error": "No se proporcionó API Key (ni en la interfaz ni como variable de entorno)"}), 400
 
+    anthropic_key = data.get("anthropic_api_key", "").strip() or os.environ.get("ANTHROPIC_API_KEY")
+
     zones = data.get("zones", [])
     if not zones:
         return jsonify({"error": "No zones provided"}), 400
@@ -48,6 +53,7 @@ def start_search():
         "zones": zones,
         "result": None,
         "filename": None,
+        "enriched": bool(anthropic_key),
     }
 
     seen = set()
@@ -69,20 +75,81 @@ def start_search():
             },
         })
 
+    def on_enrich_progress(current, total, name):
+        q.put({
+            "event": "enriching",
+            "data": {"current": current, "total": total, "name": name},
+        })
+
     def worker():
         try:
-            zone_results = run_search(api_key, zones, on_place=on_place, queries=queries or None)
-            JOBS[job_id]["result"] = zone_results
+            if anthropic_key:
+                # Full pipeline: search + enrich + score
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    operators = loop.run_until_complete(run_pipeline(
+                        google_api_key=api_key,
+                        anthropic_api_key=anthropic_key,
+                        zones=zones,
+                        queries=queries or None,
+                        on_place=on_place,
+                        on_enrich_progress=on_enrich_progress,
+                    ))
+                finally:
+                    loop.close()
 
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"prospects_{timestamp}_{job_id}.xlsx"
-            filepath = os.path.join("output", filename)
-            os.makedirs("output", exist_ok=True)
-            export_excel(zone_results, filepath)
-            JOBS[job_id]["filename"] = filepath
+                JOBS[job_id]["result"] = operators
 
-            total = sum(len(v) for v in zone_results.values())
-            q.put({"event": "done", "data": {"total": total, "job_id": job_id}})
+                # Send enriched data for each operator
+                for op in operators:
+                    q.put({
+                        "event": "enriched",
+                        "data": {
+                            "nombre": op.get("nombre", ""),
+                            "categoria": op.get("categoria_principal", ""),
+                            "score_icp": op.get("score_icp", 0),
+                            "es_icp": op.get("es_icp", False),
+                            "gmv_estimado": op.get("gmv_estimado_anual", 0),
+                            "comision_mensual": op.get("comision_solnow_mensual", 0),
+                            "precio_medio": op.get("precio_medio"),
+                            "num_activos": op.get("num_activos"),
+                            "tipo_precio": op.get("tipo_precio"),
+                            "zona_costera": op.get("zona_costera", ""),
+                        },
+                    })
+
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"prospects_enriched_{timestamp}_{job_id}.xlsx"
+                filepath = os.path.join("output", filename)
+                os.makedirs("output", exist_ok=True)
+                export_enriched(operators, filepath)
+                JOBS[job_id]["filename"] = filepath
+
+                total = len(operators)
+                icp_count = sum(1 for o in operators if o.get("es_icp"))
+                q.put({"event": "done", "data": {
+                    "total": total, "job_id": job_id,
+                    "icp_count": icp_count, "enriched": True,
+                }})
+            else:
+                # Basic search only (backward compatible)
+                zone_results = run_search(api_key, zones, on_place=on_place, queries=queries or None)
+                JOBS[job_id]["result"] = zone_results
+
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"prospects_{timestamp}_{job_id}.xlsx"
+                filepath = os.path.join("output", filename)
+                os.makedirs("output", exist_ok=True)
+                export_excel(zone_results, filepath)
+                JOBS[job_id]["filename"] = filepath
+
+                total = sum(len(v) for v in zone_results.values())
+                q.put({"event": "done", "data": {
+                    "total": total, "job_id": job_id,
+                    "enriched": False,
+                }})
+
             JOBS[job_id]["status"] = "done"
         except Exception as e:
             q.put({"event": "error", "data": {"message": str(e)}})
@@ -93,7 +160,7 @@ def start_search():
     t = threading.Thread(target=worker, daemon=True)
     t.start()
 
-    return jsonify({"job_id": job_id})
+    return jsonify({"job_id": job_id, "enriched": bool(anthropic_key)})
 
 
 @app.route("/api/stream/<job_id>")

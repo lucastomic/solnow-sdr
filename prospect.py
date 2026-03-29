@@ -19,22 +19,48 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger(__name__)
 
 QUERIES = [
+    # Jet ski
     "alquiler motos de agua {zona}",
-    "alquiler moto de agua {zona}",
-    "alquiler jet ski {zona}",
-    "jet ski rental {zona}",
-    "motos de agua {zona}",
-    "moto acuática {zona}",
-    "alquiler moto acuática {zona}",
-    "excursiones moto de agua {zona}",
-    "rutas en moto de agua {zona}",
-    "safari motos de agua {zona}",
-    "jet ski tour {zona}",
-    "jet ski hire {zona}",
-    "rent jet ski {zona}",
-    "personal watercraft rental {zona}",
+    "jet ski alquiler {zona}",
+    "motos acuáticas {zona}",
+    # Kayak / paddle
+    "alquiler kayak {zona}",
+    "kayak guiado {zona}",
+    "paddle surf alquiler {zona}",
+    "SUP alquiler {zona}",
+    # Boat excursions
+    "excursiones en barco {zona}",
+    "paseos en barco {zona}",
+    "alquiler barco sin licencia {zona}",
+    "barco compartido excursion {zona}",
+    # Charter
+    "charter nautico {zona}",
+    "alquiler velero {zona}",
+    "alquiler catamaran {zona}",
+    # Generic
     "actividades acuáticas {zona}",
     "deportes acuáticos {zona}",
+    "experiencias nauticas {zona}",
+    "water sports {zona}",
+]
+
+DEFAULT_ZONES = [
+    # Costa del Sol
+    "Marbella", "Málaga", "Torremolinos", "Nerja", "Estepona",
+    # Costa Blanca
+    "Alicante", "Benidorm", "Calpe", "Denia", "Jávea",
+    # Comunidad Valenciana
+    "Valencia", "Gandía", "Cullera",
+    # Baleares
+    "Ibiza", "Formentera", "Palma de Mallorca", "Menorca",
+    # Costa Brava / Maresme
+    "Barcelona", "Sitges", "Lloret de Mar", "Roses",
+    # Canarias
+    "Tenerife", "Gran Canaria", "Lanzarote", "Fuerteventura",
+    # Costa de la Luz
+    "Tarifa", "Cádiz", "Conil",
+    # Murcia
+    "Murcia", "Cartagena", "La Manga",
 ]
 
 EXCLUDE_KEYWORDS = [
@@ -56,7 +82,10 @@ EXCLUDE_KEYWORDS = [
     "tienda de recambios",
 ]
 
-COLUMNS = ["Nombre", "Dirección", "Teléfono", "Web", "Rating", "Reseñas", "Zona", "Estado"]
+COLUMNS = [
+    "Nombre", "Dirección", "Teléfono", "Web", "Rating", "Reseñas",
+    "Zona", "Nivel Precio", "Fecha 1ª Reseña", "Estado",
+]
 
 SEARCH_URL = "https://places.googleapis.com/v1/places:searchText"
 
@@ -69,7 +98,10 @@ SEARCH_FIELDS = (
     "places.internationalPhoneNumber,"
     "places.websiteUri,"
     "places.rating,"
-    "places.userRatingCount"
+    "places.userRatingCount,"
+    "places.currentOpeningHours,"
+    "places.priceLevel,"
+    "places.reviews"
 )
 
 
@@ -194,6 +226,17 @@ def run_search(api_key, zones, on_place=None, queries=None):
     return zone_results
 
 
+def get_first_review_date(place):
+    """Extract the date of the earliest review from the reviews list."""
+    reviews = place.get("reviews") or []
+    dates = []
+    for r in reviews:
+        ts = r.get("publishTime") or r.get("relativePublishTimeDescription", "")
+        if ts and "T" in str(ts):  # ISO-like timestamp
+            dates.append(str(ts)[:10])
+    return min(dates) if dates else ""
+
+
 def place_to_row(place):
     return [
         place.get("displayName", {}).get("text", ""),
@@ -203,6 +246,8 @@ def place_to_row(place):
         place.get("rating", ""),
         place.get("userRatingCount", ""),
         place.get("_zona", ""),
+        place.get("priceLevel", ""),
+        get_first_review_date(place),
         "",  # Estado — empty for SDR
     ]
 
@@ -247,7 +292,7 @@ def main():
         print("Error: set GOOGLE_PLACES_API_KEY environment variable")
         sys.exit(1)
 
-    zones = sys.argv[1:] if len(sys.argv) > 1 else ["Ibiza", "Mallorca", "Alicante", "Valencia"]
+    zones = sys.argv[1:] if len(sys.argv) > 1 else DEFAULT_ZONES
 
     zone_results = run_search(api_key, zones)
 

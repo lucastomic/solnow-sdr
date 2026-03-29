@@ -47,28 +47,50 @@
       flex-shrink: 0;
     }
     .query-tag button:hover { color: #f87171; }
+    .icp-badge {
+      display: inline-block; padding: 2px 8px; border-radius: 9999px;
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+    }
+    .icp-high { background: #065f46; color: #6ee7b7; }
+    .icp-mid  { background: #713f12; color: #fbbf24; }
+    .icp-low  { background: #7f1d1d; color: #fca5a5; }
   </style>
 </head>
 <body class="min-h-screen text-slate-200">
-  <div class="max-w-6xl mx-auto px-4 py-8">
+  <div class="max-w-7xl mx-auto px-4 py-8">
     <!-- Header -->
     <div class="mb-8">
       <h1 class="text-3xl font-bold text-white tracking-tight">SolNow <span class="text-emerald-400">Prospector</span></h1>
-      <p class="text-slate-400 mt-1 text-sm">Encuentra empresas en tiempo real con Google Places</p>
+      <p class="text-slate-400 mt-1 text-sm">Encuentra y cualifica empresas de actividades acuáticas con IA</p>
     </div>
 
-    <!-- API Key -->
+    <!-- API Keys -->
     <div class="bg-slate-800/60 border border-slate-700 rounded-xl p-5 mb-4">
+      <!-- Google API Key -->
       <div class="flex items-center gap-3 mb-3">
         <svg class="w-4 h-4 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
         <label class="text-sm font-medium text-slate-300">Google Places API Key</label>
         <span class="text-xs text-slate-500">(se envía directo a Google, no se guarda en el servidor)</span>
       </div>
-      <div class="relative">
+      <div class="relative mb-4">
         <input id="apiKeyInput" type="password" placeholder="AIza..."
                class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30 transition pr-10">
-        <button onclick="toggleKeyVisibility()" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition" title="Mostrar/Ocultar">
-          <svg id="eyeIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+        <button onclick="toggleVisibility('apiKeyInput')" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition" title="Mostrar/Ocultar">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+        </button>
+      </div>
+
+      <!-- Anthropic API Key -->
+      <div class="flex items-center gap-3 mb-3">
+        <svg class="w-4 h-4 text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        <label class="text-sm font-medium text-slate-300">Anthropic API Key</label>
+        <span class="text-xs text-slate-500">(opcional — para enriquecimiento IA, scoring ICP y GMV)</span>
+      </div>
+      <div class="relative">
+        <input id="anthropicKeyInput" type="password" placeholder="sk-ant-..."
+               class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/30 transition pr-10">
+        <button onclick="toggleVisibility('anthropicKeyInput')" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition" title="Mostrar/Ocultar">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
         </button>
       </div>
     </div>
@@ -129,10 +151,28 @@
           <div class="pulse-dot" id="statusDot"></div>
           <span id="statusText" class="text-sm text-slate-300">Buscando...</span>
         </div>
-        <span id="counter" class="text-2xl font-bold text-emerald-400 tabular-nums">0</span>
+        <div class="flex items-center gap-4">
+          <span id="counter" class="text-2xl font-bold text-emerald-400 tabular-nums">0</span>
+        </div>
       </div>
       <div class="mt-3 h-1.5 bg-slate-700 rounded-full overflow-hidden">
         <div id="progressBar" class="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500" style="width: 0%"></div>
+      </div>
+    </div>
+
+    <!-- ICP Summary (shown after enrichment) -->
+    <div id="icpSummary" class="hidden grid grid-cols-3 gap-4 mb-6">
+      <div class="bg-slate-800/60 border border-emerald-700/50 rounded-xl p-4 text-center">
+        <div class="text-3xl font-bold text-emerald-400 tabular-nums" id="icpCount">0</div>
+        <div class="text-xs text-slate-400 mt-1">Prospectos ICP</div>
+      </div>
+      <div class="bg-slate-800/60 border border-purple-700/50 rounded-xl p-4 text-center">
+        <div class="text-3xl font-bold text-purple-400 tabular-nums" id="avgScore">0</div>
+        <div class="text-xs text-slate-400 mt-1">Score ICP Medio</div>
+      </div>
+      <div class="bg-slate-800/60 border border-amber-700/50 rounded-xl p-4 text-center">
+        <div class="text-3xl font-bold text-amber-400 tabular-nums" id="totalComision">0</div>
+        <div class="text-xs text-slate-400 mt-1">Comisión Mensual Total</div>
       </div>
     </div>
 
@@ -147,6 +187,9 @@
               <th class="px-4 py-3">Teléfono</th>
               <th class="px-4 py-3">Web</th>
               <th class="px-4 py-3 text-center">Rating</th>
+              <th class="px-4 py-3 text-center enriched-col hidden">Categoría</th>
+              <th class="px-4 py-3 text-center enriched-col hidden">Score ICP</th>
+              <th class="px-4 py-3 text-right enriched-col hidden">Comisión/mes</th>
             </tr>
           </thead>
           <tbody id="results"></tbody>
@@ -171,24 +214,35 @@
 
   <script>
     // ── Default data ──
-    const DEFAULT_ZONES = ["Ibiza", "Mallorca", "Alicante", "Valencia"];
+    const DEFAULT_ZONES = [
+      "Marbella", "Málaga", "Torremolinos", "Nerja", "Estepona",
+      "Alicante", "Benidorm", "Calpe", "Denia", "Jávea",
+      "Valencia", "Gandía", "Cullera",
+      "Ibiza", "Formentera", "Palma de Mallorca", "Menorca",
+      "Barcelona", "Sitges", "Lloret de Mar", "Roses",
+      "Tenerife", "Gran Canaria", "Lanzarote", "Fuerteventura",
+      "Tarifa", "Cádiz", "Conil",
+      "Murcia", "Cartagena", "La Manga",
+    ];
     const DEFAULT_QUERIES = [
       "alquiler motos de agua {zona}",
-      "alquiler moto de agua {zona}",
-      "alquiler jet ski {zona}",
-      "jet ski rental {zona}",
-      "motos de agua {zona}",
-      "moto acuática {zona}",
-      "alquiler moto acuática {zona}",
-      "excursiones moto de agua {zona}",
-      "rutas en moto de agua {zona}",
-      "safari motos de agua {zona}",
-      "jet ski tour {zona}",
-      "jet ski hire {zona}",
-      "rent jet ski {zona}",
-      "personal watercraft rental {zona}",
+      "jet ski alquiler {zona}",
+      "motos acuáticas {zona}",
+      "alquiler kayak {zona}",
+      "kayak guiado {zona}",
+      "paddle surf alquiler {zona}",
+      "SUP alquiler {zona}",
+      "excursiones en barco {zona}",
+      "paseos en barco {zona}",
+      "alquiler barco sin licencia {zona}",
+      "barco compartido excursion {zona}",
+      "charter nautico {zona}",
+      "alquiler velero {zona}",
+      "alquiler catamaran {zona}",
       "actividades acuáticas {zona}",
       "deportes acuáticos {zona}",
+      "experiencias nauticas {zona}",
+      "water sports {zona}",
     ];
 
     // ── State (hydrate from localStorage) ──
@@ -198,9 +252,14 @@
     let count = 0;
     let evtSource = null;
     let queriesPanelOpen = true;
+    let isEnriched = false;
 
-    // Hydrate API key
+    // Track enriched data by operator name for table updates
+    let enrichedData = {};
+
+    // Hydrate API keys
     const savedKey = localStorage.getItem("sol_api_key") || "";
+    const savedAnthropicKey = localStorage.getItem("sol_anthropic_key") || "";
 
     // ── Persist helpers ──
     function saveState() {
@@ -287,8 +346,8 @@
     }
 
     // ── API Key visibility ──
-    function toggleKeyVisibility() {
-      const input = document.getElementById("apiKeyInput");
+    function toggleVisibility(inputId) {
+      const input = document.getElementById(inputId);
       input.type = input.type === "password" ? "text" : "password";
     }
 
@@ -301,34 +360,48 @@
       }
 
       const apiKey = document.getElementById("apiKeyInput").value.trim();
+      const anthropicKey = document.getElementById("anthropicKeyInput").value.trim();
 
       // Reset UI
       const btn = document.getElementById("searchBtn");
       btn.disabled = true;
       count = 0;
+      enrichedData = {};
+      isEnriched = false;
       document.getElementById("counter").textContent = "0";
       document.getElementById("results").innerHTML = "";
       document.getElementById("statusBar").classList.remove("hidden");
       document.getElementById("tableWrap").classList.remove("hidden");
       document.getElementById("downloadWrap").classList.add("hidden");
       document.getElementById("errorWrap").classList.add("hidden");
-      document.getElementById("statusText").textContent = "Buscando en " + zones.join(", ") + "...";
+      document.getElementById("icpSummary").classList.add("hidden");
+      document.getElementById("statusText").textContent = "Buscando en " + zones.length + " zonas...";
       document.getElementById("statusDot").style.background = "#10b981";
       document.getElementById("statusDot").style.animation = "";
       document.getElementById("progressBar").style.width = "15%";
 
-      // Save API key to localStorage
+      // Hide enriched columns initially
+      document.querySelectorAll(".enriched-col").forEach(el => el.classList.add("hidden"));
+
+      // Save API keys to localStorage
       if (apiKey) localStorage.setItem("sol_api_key", apiKey);
+      if (anthropicKey) localStorage.setItem("sol_anthropic_key", anthropicKey);
 
       try {
         const resp = await fetch("/api/search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ zones, queries, api_key: apiKey }),
+          body: JSON.stringify({
+            zones,
+            queries,
+            api_key: apiKey,
+            anthropic_api_key: anthropicKey,
+          }),
         });
         const data = await resp.json();
         if (data.error) throw new Error(data.error);
         jobId = data.job_id;
+        isEnriched = data.enriched;
         listenSSE(jobId);
       } catch (err) {
         showError(err.message);
@@ -344,11 +417,12 @@
         count++;
         document.getElementById("counter").textContent = count;
 
-        const pct = Math.min(15 + count * 1.5, 90);
+        const pct = Math.min(15 + count * 0.5, isEnriched ? 50 : 90);
         document.getElementById("progressBar").style.width = pct + "%";
 
         const row = document.createElement("tr");
         row.className = "row-enter border-b border-slate-700/50 hover:bg-slate-700/30 transition";
+        row.setAttribute("data-name", p.name);
 
         const website = p.website
           ? `<a href="${escHtml(p.website)}" target="_blank" rel="noopener" class="text-emerald-400 hover:underline truncate block max-w-[200px]">${trimUrl(p.website)}</a>`
@@ -364,10 +438,27 @@
           <td class="px-4 py-2.5 text-slate-300">${escHtml(p.phone) || '<span class="text-slate-500">—</span>'}</td>
           <td class="px-4 py-2.5">${website}</td>
           <td class="px-4 py-2.5 text-center">${rating}</td>
+          <td class="px-4 py-2.5 text-center enriched-col hidden">—</td>
+          <td class="px-4 py-2.5 text-center enriched-col hidden">—</td>
+          <td class="px-4 py-2.5 text-right enriched-col hidden">—</td>
         `;
 
         const tbody = document.getElementById("results");
         tbody.insertBefore(row, tbody.firstChild);
+      });
+
+      evtSource.addEventListener("enriching", (e) => {
+        const d = JSON.parse(e.data);
+        const pct = 50 + (d.current / d.total) * 40;
+        document.getElementById("progressBar").style.width = pct + "%";
+        document.getElementById("statusText").textContent =
+          `Enriqueciendo con IA... ${d.current}/${d.total}`;
+        document.getElementById("statusDot").style.background = "#a855f7";
+      });
+
+      evtSource.addEventListener("enriched", (e) => {
+        const d = JSON.parse(e.data);
+        enrichedData[d.nombre] = d;
       });
 
       evtSource.addEventListener("done", (e) => {
@@ -376,9 +467,35 @@
         document.getElementById("progressBar").style.width = "100%";
         document.getElementById("statusDot").style.background = "#3b82f6";
         document.getElementById("statusDot").style.animation = "none";
-        document.getElementById("statusText").textContent = `Completado — ${d.total} empresas encontradas`;
         document.getElementById("downloadWrap").classList.remove("hidden");
         document.getElementById("searchBtn").disabled = false;
+
+        if (d.enriched) {
+          // Show enriched columns
+          document.querySelectorAll(".enriched-col").forEach(el => el.classList.remove("hidden"));
+
+          // Update table rows with enriched data
+          updateTableWithEnrichedData();
+
+          // Show ICP summary
+          const icpItems = Object.values(enrichedData).filter(o => o.es_icp);
+          const allItems = Object.values(enrichedData);
+          const avgScoreVal = allItems.length
+            ? Math.round(allItems.reduce((s, o) => s + (o.score_icp || 0), 0) / allItems.length)
+            : 0;
+          const totalComisionVal = allItems.reduce((s, o) => s + (o.comision_mensual || 0), 0);
+
+          document.getElementById("icpCount").textContent = d.icp_count || icpItems.length;
+          document.getElementById("avgScore").textContent = avgScoreVal;
+          document.getElementById("totalComision").textContent = formatEur(totalComisionVal);
+          document.getElementById("icpSummary").classList.remove("hidden");
+
+          document.getElementById("statusText").textContent =
+            `Completado — ${d.total} empresas, ${d.icp_count || icpItems.length} ICP`;
+        } else {
+          document.getElementById("statusText").textContent =
+            `Completado — ${d.total} empresas encontradas`;
+        }
       });
 
       evtSource.addEventListener("error", (e) => {
@@ -392,6 +509,32 @@
       evtSource.onerror = () => {
         evtSource.close();
       };
+    }
+
+    function updateTableWithEnrichedData() {
+      const rows = document.querySelectorAll("#results tr");
+      rows.forEach(row => {
+        const name = row.getAttribute("data-name");
+        const d = enrichedData[name];
+        if (!d) return;
+
+        const cells = row.querySelectorAll(".enriched-col");
+        if (cells.length >= 3) {
+          // Category
+          cells[0].textContent = d.categoria || "—";
+          cells[0].classList.remove("hidden");
+
+          // Score ICP
+          const score = d.score_icp || 0;
+          const badgeClass = score > 60 ? "icp-high" : score > 40 ? "icp-mid" : "icp-low";
+          cells[1].innerHTML = `<span class="icp-badge ${badgeClass}">${score}</span>`;
+          cells[1].classList.remove("hidden");
+
+          // Commission
+          cells[2].textContent = d.comision_mensual ? formatEur(d.comision_mensual) : "—";
+          cells[2].classList.remove("hidden");
+        }
+      });
     }
 
     function downloadExcel() {
@@ -416,8 +559,14 @@
       try { return new URL(url).hostname.replace("www.", ""); } catch { return url; }
     }
 
+    function formatEur(n) {
+      if (!n && n !== 0) return "—";
+      return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
+    }
+
     // ── Init ──
     document.getElementById("apiKeyInput").value = savedKey;
+    document.getElementById("anthropicKeyInput").value = savedAnthropicKey;
     renderChips();
     renderQueryTags();
   </script>
