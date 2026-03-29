@@ -80,6 +80,65 @@ EXCLUDE_KEYWORDS = [
     "reparación",
     "reparacion",
     "tienda de recambios",
+    # Retail / commercial
+    "decathlon",
+    "centro comercial",
+    "supermercado",
+    "inmobiliaria",
+    "real estate",
+    "agencia de viajes",
+    # Non-water tourism
+    "free tour",
+    "tour a pie",
+    "mirador",
+    "escape room",
+    "paintball",
+    "karting",
+    "bowling",
+    "cine ",
+    "teatro",
+    # Gyms / sports clubs
+    "gimnasio",
+    "fitness",
+    "activaclub",
+    "sport club",
+    # Hospitality (not operators)
+    "spa ",
+    "hotel ",
+    "restaurante",
+    "bar ",
+    "cafeteria",
+    # Parks / attractions
+    "parque de ",
+    "parque municipal",
+    "ilusiona",
+    # Misc
+    "tinglado",
+]
+
+# Google Maps types that indicate a valid water sports operator
+VALID_GOOGLE_TYPES = [
+    "water_sports",
+    "boat_rental",
+    "boat_tour",
+    "scuba_diving",
+    "kayak_rental",
+    "jet_ski_rental",
+    "sailing",
+    "tour_operator",
+    "tourist_attraction",
+    "travel_agency",
+    "amusement_center",
+]
+
+# Keywords in Google type display names (localized) that are valid
+VALID_CATEGORY_KEYWORDS = [
+    "náutic", "nautic", "barco", "embarcación", "embarcacion", "charter",
+    "alquiler de barcos", "water sport", "deportes acuáticos", "deportes acuaticos",
+    "actividades acuáticas", "actividades acuaticas", "kayak", "paddle", "jet ski",
+    "motos de agua", "buceo", "vela", "sailing", "boat",
+    "excursión marítima", "excursion maritima", "paseo en barco",
+    "diving", "snorkel", "surf", "canoa", "piragua",
 ]
 
 COLUMNS = [
@@ -101,16 +160,54 @@ SEARCH_FIELDS = (
     "places.userRatingCount,"
     "places.currentOpeningHours,"
     "places.priceLevel,"
-    "places.reviews"
+    "places.reviews,"
+    "places.types,"
+    "places.primaryTypeDisplayName"
 )
 
 
 def is_relevant(place):
-    """Filter out irrelevant results (no contact info or excluded business types)."""
+    """Filter out irrelevant results using two-layer validation.
+
+    Layer 1: Exclude by name keywords (Decathlon, gyms, malls, etc.)
+    Layer 2: Validate by Google Maps type/category (water sports related)
+    If type data is missing, include the result (benefit of the doubt).
+    """
     if not place.get("websiteUri") and not place.get("nationalPhoneNumber"):
         return False
+
     name_lower = place.get("displayName", {}).get("text", "").lower()
-    return not any(kw in name_lower for kw in EXCLUDE_KEYWORDS)
+
+    # Layer 1: Exclude obvious non-operators by name
+    if any(kw in name_lower for kw in EXCLUDE_KEYWORDS):
+        return False
+
+    # Layer 2: Validate by Google Maps category
+    # Get all type signals from the place
+    types = place.get("types") or []
+    primary_display = (place.get("primaryTypeDisplayName") or {}).get("text", "").lower()
+
+    # If we have type data, check if any type matches valid water sports categories
+    if types or primary_display:
+        # Check structured types
+        has_valid_type = any(t in VALID_GOOGLE_TYPES for t in types)
+
+        # Check display name keywords (localized category names)
+        has_valid_keyword = any(kw in primary_display for kw in VALID_CATEGORY_KEYWORDS)
+
+        # Also check name for water-sports signals as a safety net
+        name_has_water_signal = any(kw in name_lower for kw in VALID_CATEGORY_KEYWORDS)
+
+        if has_valid_type or has_valid_keyword or name_has_water_signal:
+            return True
+
+        # Has type data but none match → likely not a water sports operator
+        log.debug("Excluded (no valid category): %s [types=%s, primary=%s]",
+                   name_lower, types, primary_display)
+        return False
+
+    # No type data at all → benefit of the doubt, include it
+    return True
 
 
 def text_search(api_key, query, page_token=None):

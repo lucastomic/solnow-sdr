@@ -157,6 +157,16 @@ async def run_pipeline(
         log.info("Phase 2: Web enrichment with Claude Haiku...")
         await enrich_all(operators, anthropic_api_key, on_progress=on_enrich_progress)
         log.info("Enrichment complete")
+
+        # Filter out operators classified as non-aquatic by name inference
+        before = len(operators)
+        operators = [
+            op for op in operators
+            if op.get("categoria_principal") != "no_acuatico"
+        ]
+        removed = before - len(operators)
+        if removed:
+            log.info("Removed %d non-aquatic operators (no_acuatico)", removed)
     else:
         log.info("Phase 2: Skipped (no Anthropic API key)")
 
@@ -164,6 +174,13 @@ async def run_pipeline(
     log.info("Phase 3: GMV estimation + ICP scoring...")
     for op in operators:
         score_and_estimate(op)
+
+    # Remove marketplaces from output (they contaminate the pipeline)
+    before = len(operators)
+    operators = [op for op in operators if not op.get("es_marketplace")]
+    marketplace_count = before - len(operators)
+    if marketplace_count:
+        log.info("Removed %d marketplace/intermediary operators", marketplace_count)
 
     # Sort: best prospects first
     operators.sort(key=lambda o: (-o.get("score_icp", 0), -o.get("comision_solnow_mensual", 0)))
