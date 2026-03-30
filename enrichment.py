@@ -18,6 +18,31 @@ from bs4 import BeautifulSoup
 
 log = logging.getLogger(__name__)
 
+# ── Retry helper for Anthropic rate limits ───────────────────────────────────
+
+MAX_RETRIES = 3
+RETRY_BACKOFF = [2, 4, 8]  # seconds
+
+
+async def _call_claude_with_retry(anthropic_client, **kwargs) -> "anthropic.types.Message":
+    """Call anthropic_client.messages.create with retry on 429 Too Many Requests."""
+    import anthropic as _anthropic
+
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            return await asyncio.to_thread(
+                anthropic_client.messages.create, **kwargs
+            )
+        except _anthropic.RateLimitError:
+            if attempt < MAX_RETRIES:
+                wait = RETRY_BACKOFF[attempt]
+                log.warning("Anthropic 429 — retrying in %ds (attempt %d/%d)",
+                            wait, attempt + 1, MAX_RETRIES)
+                await asyncio.sleep(wait)
+            else:
+                log.error("Anthropic 429 — max retries exceeded")
+                raise
+
 # ── Claude extraction prompt ─────────────────────────────────────────────────
 
 EXTRACTION_PROMPT = """\
@@ -265,8 +290,8 @@ async def fetch_gyg_fallback(
             nombre=nombre, ciudad=ciudad, html_content=clean_text,
         )
 
-        message = await asyncio.to_thread(
-            anthropic_client.messages.create,
+        message = await _call_claude_with_retry(
+            anthropic_client,
             model="claude-haiku-4-5-20251001",
             max_tokens=256,
             messages=[{"role": "user", "content": prompt}],
@@ -291,8 +316,8 @@ async def claude_extract(clean_text: str, anthropic_client) -> dict:
     prompt = EXTRACTION_PROMPT.format(html_content=clean_text)
 
     try:
-        message = await asyncio.to_thread(
-            anthropic_client.messages.create,
+        message = await _call_claude_with_retry(
+            anthropic_client,
             model="claude-haiku-4-5-20251001",
             max_tokens=1024,
             messages=[{"role": "user", "content": prompt}],
@@ -332,8 +357,8 @@ async def infer_category_from_name(nombre: str, anthropic_client) -> str | None:
     prompt = CATEGORY_INFERENCE_PROMPT.format(nombre=nombre)
 
     try:
-        message = await asyncio.to_thread(
-            anthropic_client.messages.create,
+        message = await _call_claude_with_retry(
+            anthropic_client,
             model="claude-haiku-4-5-20251001",
             max_tokens=32,
             messages=[{"role": "user", "content": prompt}],
