@@ -116,6 +116,7 @@ def start_search():
                             "num_activos": op.get("num_activos"),
                             "tipo_precio": op.get("tipo_precio"),
                             "zona_costera": op.get("zona_costera", ""),
+                            "email": ", ".join(op.get("emails") or []),
                         },
                     })
 

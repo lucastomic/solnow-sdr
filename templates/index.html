@@ -185,6 +185,7 @@
               <th class="px-4 py-3">Nombre</th>
               <th class="px-4 py-3">Zona</th>
               <th class="px-4 py-3">Teléfono</th>
+              <th class="px-4 py-3 enriched-col hidden">Email</th>
               <th class="px-4 py-3">Web</th>
               <th class="px-4 py-3 text-center">Rating</th>
               <th class="px-4 py-3 text-center enriched-col hidden">Categoría</th>
@@ -436,6 +437,7 @@
           <td class="px-4 py-2.5 font-medium text-white">${escHtml(p.name)}</td>
           <td class="px-4 py-2.5 text-slate-400">${escHtml(p.zona)}</td>
           <td class="px-4 py-2.5 text-slate-300">${escHtml(p.phone) || '<span class="text-slate-500">—</span>'}</td>
+          <td class="px-4 py-2.5 text-slate-300 enriched-col hidden">—</td>
           <td class="px-4 py-2.5">${website}</td>
           <td class="px-4 py-2.5 text-center">${rating}</td>
           <td class="px-4 py-2.5 text-center enriched-col hidden">—</td>
@@ -519,20 +521,24 @@
         if (!d) return;
 
         const cells = row.querySelectorAll(".enriched-col");
-        if (cells.length >= 3) {
-          // Category
-          cells[0].textContent = d.categoria || "—";
+        if (cells.length >= 4) {
+          // Email
+          cells[0].textContent = d.email || "—";
           cells[0].classList.remove("hidden");
+
+          // Category
+          cells[1].textContent = d.categoria || "—";
+          cells[1].classList.remove("hidden");
 
           // Score ICP
           const score = d.score_icp || 0;
           const badgeClass = score > 60 ? "icp-high" : score > 40 ? "icp-mid" : "icp-low";
-          cells[1].innerHTML = `<span class="icp-badge ${badgeClass}">${score}</span>`;
-          cells[1].classList.remove("hidden");
+          cells[2].innerHTML = `<span class="icp-badge ${badgeClass}">${score}</span>`;
+          cells[2].classList.remove("hidden");
 
           // Commission
-          cells[2].textContent = d.comision_mensual ? formatEur(d.comision_mensual) : "—";
-          cells[2].classList.remove("hidden");
+          cells[3].textContent = d.comision_mensual ? formatEur(d.comision_mensual) : "—";
+          cells[3].classList.remove("hidden");
         }
       });
     }

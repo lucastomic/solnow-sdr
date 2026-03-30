@@ -81,7 +81,62 @@ _EMPTY_RESULT = {
     "menciona_contrato": False,
     "tiene_reserva_online": False,
     "menciona_numero_guias": None,
+    "emails": [],
 }
+
+# ── Email extraction (no AI needed) ──────────────────────────────────────────
+
+_EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
+
+_EMAIL_DOMAIN_BLACKLIST = {
+    "example.com", "example.org", "sentry.io", "wixpress.com",
+    "wix.com", "squarespace.com", "wordpress.com", "googleapis.com",
+    "googleusercontent.com", "w3.org", "schema.org", "facebook.com",
+    "twitter.com", "instagram.com", "youtube.com",
+}
+
+_EMAIL_EXTENSION_BLACKLIST = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".css", ".js"}
+
+
+def extract_emails(html: str) -> list[str]:
+    """Extract email addresses from raw HTML using mailto: links and regex.
+
+    Filters out common false positives (tracking pixels, CMS internals, etc.).
+    Returns deduplicated, sorted list of emails.
+    """
+    emails = set()
+
+    # 1. mailto: links (most reliable)
+    soup = BeautifulSoup(html, "html.parser")
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        if href.startswith("mailto:"):
+            addr = href[7:].split("?")[0].strip().lower()
+            if addr:
+                emails.add(addr)
+
+    # 2. Regex scan on raw HTML
+    for match in _EMAIL_RE.findall(html):
+        emails.add(match.lower())
+
+    # 3. Filter out junk
+    filtered = []
+    for email in emails:
+        domain = email.split("@", 1)[1] if "@" in email else ""
+        # Skip blacklisted domains
+        if domain in _EMAIL_DOMAIN_BLACKLIST:
+            continue
+        # Skip file-extension-looking addresses
+        if any(email.endswith(ext) for ext in _EMAIL_EXTENSION_BLACKLIST):
+            continue
+        # Skip noreply / no-reply
+        local = email.split("@")[0]
+        if local in ("noreply", "no-reply", "mailer-daemon", "postmaster"):
+            continue
+        filtered.append(email)
+
+    return sorted(set(filtered))
+
 
 # ── Subpage discovery ────────────────────────────────────────────────────────
 
@@ -327,11 +382,21 @@ async def enrich_operator(
 
         if not html or len(html) < 500:
             result = dict(_EMPTY_RESULT)
+            result["emails"] = []
             cache[domain] = result
             return result
 
+        # Step 1b: Extract emails from raw HTML (before cleaning)
+        emails = extract_emails(html)
+
+        # Also try homepage for emails if we landed on a subpage
+        homepage_html = await fetch_static(web_url, http_client)
+        if homepage_html and homepage_html != html:
+            emails = sorted(set(emails + extract_emails(homepage_html)))
+
         clean_text = clean_for_llm(html)
         result = await claude_extract(clean_text, anthropic_client)
+        result["emails"] = emails
 
         # Step 2: If no price found, try GetYourGuide fallback
         if result.get("precio_medio") is None:
